@@ -17,6 +17,11 @@ jobs:
               run: |
                 sudo apt-get update
                 sudo apt-get install -y curl jq
+                if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                  echo "MANUALTRIG=true" >> $GITHUB_ENV
+                else
+                  echo "MANUALTRIG=false" >> $GITHUB_ENV
+                fi
 
             - name: Check latest version
               id: checkver
@@ -75,11 +80,13 @@ jobs:
                 sudo rm -rf ./pacman
 
             - name: Update PKGBUILD for all architectures
-              if: env.UPDATENEEDED == 'true'
+              if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
               run: |
                 echo "Updating PKGBUILD from version $CURRENT_VERSION to $LATEST_VERSION_NUM"
                 sed -i "s/pkgver=.*$/pkgver=$LATEST_VERSION_NUM/g" PKGBUILD
-                sed -i "s/pkgrel=.*$/pkgrel=1/g" PKGBUILD
+                if [ "$UPDATENEEDED" == "true" ]; then
+                    sed -i "s/pkgrel=.*$/pkgrel=1/g" PKGBUILD
+                fi
                 declare -A ARCH_MAPPINGS=(
                     ["x86_64"]="x86_64"
                     ["i686"]="i686"
@@ -106,7 +113,7 @@ jobs:
                 cat PKGBUILD
 
             - name: Commit and push changes to GitHub
-              if: env.UPDATENEEDED == 'true'
+              if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
               run: |
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
@@ -115,7 +122,7 @@ jobs:
                 git push -u origin master
 
             - name: Publish to AUR
-              if: env.UPDATENEEDED == 'true'
+              if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
               env:
                 AURSSHKEY: ${{ secrets.AURSSHKEY }}
                 AURUSER: 'LunarN0v4'
