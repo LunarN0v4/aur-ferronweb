@@ -23,7 +23,7 @@ else
     abi=""
 fi
 source=("https://downloads.ferronweb.org/${pkgver}/ferron-${pkgver}-${_arch}-unknown-linux-gnu${abi}.zip")
-sha256sums=('SKIP')
+sha256sums=('67d479ad28adce54ce4a4c15e5ad0235a07708ec805a0c83652e404dc6a3c05c')
 provides=('ferron')
 
 prepare() {
