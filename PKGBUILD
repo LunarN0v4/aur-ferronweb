@@ -1,5 +1,5 @@
 pkgname=ferronweb
-pkgver=1.1.2
+pkgver=1.1.1
 pkgrel=1
 pkgdesc="Ferron web server"
 arch=('x86_64' 'i686' 'armv7' 'aarch64' 'riscv64')
