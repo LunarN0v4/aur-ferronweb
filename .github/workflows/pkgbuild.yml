@@ -68,6 +68,8 @@ jobs:
 
             - name: Commit and push changes
               if: env.UPDATENEEDED == 'true'
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
@@ -78,8 +80,8 @@ jobs:
             - name: Publish to AUR
               if: env.UPDATENEEDED == 'true'
               env:
-                  AURSSHKEY: ${{ secrets.AURSSHKEY }}
-                  AURUSER: 'LunarN0v4'
+                AURSSHKEY: ${{ secrets.AURSSHKEY }}
+                AURUSER: 'LunarN0v4'
               run: |
                 mkdir -p ~/.ssh
                 echo "$AURSSHKEY" > ~/.ssh/aur_key
@@ -97,4 +99,4 @@ jobs:
                 git config --local user.name "GitHub Action"
                 git add PKGBUILD ferron.install
                 git commit -m "Update to version $LATEST_VERSION_NUM"
-                git push
+                git push -u origin master
