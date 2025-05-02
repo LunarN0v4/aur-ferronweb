@@ -115,6 +115,7 @@ jobs:
             - name: Commit and push changes to GitHub
               if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
               run: |
+                git config --global init.defaultBranch master
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
                 git add PKGBUILD
@@ -127,6 +128,7 @@ jobs:
                 AURSSHKEY: ${{ secrets.AURSSHKEY }}
                 AURUSER: 'LunarN0v4'
               run: |
+                git config --global init.defaultBranch master
                 mkdir -p ~/.ssh
                 echo "$AURSSHKEY" > ~/.ssh/aur_key
                 chmod 600 ~/.ssh/aur_key
