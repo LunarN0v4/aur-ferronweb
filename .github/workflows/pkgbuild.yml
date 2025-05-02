@@ -1,0 +1,94 @@
+name: PKGBUILD Updater
+
+on:
+    schedule:
+        - cron: '0 2 * * *'
+    workflow_dispatch:
+    push:
+
+jobs:
+    pkgupdate:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up environment
+              run: |
+                sudo apt-get update
+                sudo apt-get install -y curl jq
+
+            - name: Check latest version
+              id: checkver
+              run: |
+                LATEST_VERSION=$(curl -fsL https://downloads.ferronweb.org/latest.ferron)
+                echo "Latest version: $LATEST_VERSION"
+                if [[ "$LATEST_VERSION" == v* ]]; then
+                    LATEST_VERSION_NUM=${LATEST_VERSION#v}
+                else
+                    LATEST_VERSION_NUM=$LATEST_VERSION
+                fi
+                echo "Latest version number: $LATEST_VERSION_NUM"
+                CURRENT_VERSION=$(grep -oP 'pkgver=\K[^\s]+' PKGBUILD)
+                echo "Current version: $CURRENT_VERSION"
+                echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
+                echo "LATEST_VERSION_NUM=$LATEST_VERSION_NUM" >> $GITHUB_ENV
+                echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_ENV
+                if [ "$LATEST_VERSION_NUM" != "$CURRENT_VERSION" ]; then
+                    echo "UPDATENEEDED=true" >> $GITHUB_ENV
+                else
+                    echo "UPDATENEEDED=false" >> $GITHUB_ENV
+                fi
+
+            - name: Update PKGBUILD
+              if: env.UPDATENEEDED == 'true'
+              run: |
+                echo "Updating PKGBUILD from version $CURRENT_VERSION to $LATEST_VERSION_NUM"
+                ARCHS=("x86_64" "i686" "armv7" "aarch64" "riscv64")
+                CHECKSUMS=()
+                for ARCH in "${ARCHS[@]}"; do
+                    echo "Processing architecture: $ARCH"
+                    FILE_NAME="ferron-$LATEST_VERSION_NUM-$ARCH-unknown-linux-gnu.zip"
+                    URL="https://downloads.ferronweb.org/$LATEST_VERSION/$FILE_NAME"
+                    curl -fsSL "$URL" -o "$FILE_NAME"
+                    CHECKSUM=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
+                    CHECKSUMS+=("'$CHECKSUM'")
+                done
+                CHECKSUMS_JOINED=$(IFS=,; echo "${CHECKSUMS[*]}")
+                sed -i "s/pkgver=.*$/pkgver=$LATEST_VERSION_NUM/g" PKGBUILD
+                sed -i "s/pkgrel=.*$/pkgrel=1/g" PKGBUILD
+                sed -i "s/sha256sums=.*$/sha256sums=($CHECKSUMS_JOINED)/g" PKGBUILD
+                cat PKGBUILD
+
+            - name: Commit and push changes
+              if: env.UPDATENEEDED == 'true'
+              run: |
+                git config --local user.email "action@github.com"
+                git config --local user.name "GitHub Action"
+                git add PKGBUILD
+                git commit -m "Update to version $LATEST_VERSION_NUM"
+                git push -u origin master
+
+            - name: Publish to AUR
+              if: env.UPDATENEEDED == 'true'
+              env:
+                  AURSSHKEY: ${{ secrets.AURSSHKEY }}
+                  AURUSER: 'LunarN0v4'
+              run: |
+                mkdir -p ~/.ssh
+                echo "$AURSSHKEY" > ~/.ssh/aur_key
+                chmod 600 ~/.ssh/aur_key
+                cat > ~/.ssh/config << EOF
+                Host aur.archlinux.org
+                    IdentityFile ~/.ssh/aur_key
+                    User $AURUSER
+                EOF
+                ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+                git clone ssh://aur@aur.archlinux.org/ferronweb.git aur-repo
+                cp PKGBUILD ferron.install aur-repo/
+                cd aur-repo
+                git config --local user.email "action@github.com"
+                git config --local user.name "GitHub Action"
+                git add PKGBUILD ferron.install
+                git commit -m "Update to version $LATEST_VERSION_NUM"
+                git push
