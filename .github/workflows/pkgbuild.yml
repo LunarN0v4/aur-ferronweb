@@ -16,7 +16,7 @@ jobs:
             - name: Set up environment
               run: |
                 sudo apt-get update
-                sudo apt-get install -y curl jq
+                sudo apt-get install -y curl jq base-devel
 
             - name: Check latest version
               id: checkver
@@ -40,48 +40,56 @@ jobs:
                     echo "UPDATENEEDED=false" >> $GITHUB_ENV
                 fi
 
-            - name: Update PKGBUILD
+            - name: Update PKGBUILD for all architectures
               if: env.UPDATENEEDED == 'true'
               run: |
                 echo "Updating PKGBUILD from version $CURRENT_VERSION to $LATEST_VERSION_NUM"
-                declare -A ARCH_MAPPINGS
-                ARCH_MAPPINGS=( ["x86_64"]="x86_64" ["i686"]="i686" ["armv7"]="armv7" ["aarch64"]="aarch64" ["riscv64gc"]="riscv64" )
+                
+                # Update version and pkgrel
                 sed -i "s/pkgver=.*$/pkgver=$LATEST_VERSION_NUM/g" PKGBUILD
                 sed -i "s/pkgrel=.*$/pkgrel=1/g" PKGBUILD
-                for SRC_ARCH in "x86_64" "i686" "armv7" "aarch64" "riscv64gc"; do
-                    PKG_ARCH=${ARCH_MAPPINGS[$SRC_ARCH]}
-                    echo "Processing architecture: $SRC_ARCH (package arch: $PKG_ARCH)"
-                    if [ "$SRC_ARCH" == "armv7" ]; then
-                        ABI="eabihf"
-                    else
-                        ABI=""
-                    fi
-                    FILE_NAME="ferron-$LATEST_VERSION_NUM-$SRC_ARCH-unknown-linux-gnu${ABI}.zip"
-                    URL="https://downloads.ferronweb.org/$LATEST_VERSION/$FILE_NAME"
-                    echo "Downloading: $URL"
-                    curl -fsSL "$URL" -o "$FILE_NAME"
-                    CHECKSUM=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
-                    echo "Checksum for $PKG_ARCH: $CHECKSUM"
-                    sed -i "s/sha256sums_$PKG_ARCH=.*$/sha256sums_$PKG_ARCH=('$CHECKSUM')/g" PKGBUILD
+                mkdir -p .github/aur-pkgbuilds
+                declare -A ARCH_MAPPINGS=(
+                  ["x86_64"]="x86_64"
+                  ["i686"]="i686"
+                  ["armv7"]="armv7"
+                  ["aarch64"]="aarch64"
+                  ["riscv64gc"]="riscv64"
+                )
+                for SRC_ARCH in "${!ARCH_MAPPINGS[@]}"; do
+                  PKG_ARCH=${ARCH_MAPPINGS[$SRC_ARCH]}
+                  echo "Processing architecture: $SRC_ARCH (package arch: $PKG_ARCH)"
+                  if [ "$SRC_ARCH" == "armv7" ]; then
+                    ABI="eabihf"
+                  else
+                    ABI=""
+                  fi
+                  FILE_NAME="ferron-$LATEST_VERSION_NUM-$SRC_ARCH-unknown-linux-gnu${ABI}.zip"
+                  URL="https://downloads.ferronweb.org/$LATEST_VERSION/$FILE_NAME"
+                  echo "Downloading: $URL"
+                  curl -fsSL "$URL" -o "$FILE_NAME"
+                  CHECKSUM=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
+                  echo "Checksum for $PKG_ARCH: $CHECKSUM"
+                  cp PKGBUILD ".github/aur-pkgbuilds/PKGBUILD.$PKG_ARCH"
+                  sed -i "s/sha256sums=('SKIP')/sha256sums=('$CHECKSUM')/g" ".github/aur-pkgbuilds/PKGBUILD.$PKG_ARCH"
                 done
+                sed -i "s/sha256sums=('SKIP')/sha256sums=('SKIP')/g" PKGBUILD
                 cat PKGBUILD
 
-            - name: Commit and push changes
+            - name: Commit and push changes to GitHub
               if: env.UPDATENEEDED == 'true'
-              env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
-                git add PKGBUILD
+                git add PKGBUILD .github/aur-pkgbuilds/
                 git commit -m "Update to version $LATEST_VERSION_NUM"
                 git push -u origin master
 
             - name: Publish to AUR
               if: env.UPDATENEEDED == 'true'
               env:
-                AURSSHKEY: ${{ secrets.AURSSHKEY }}
-                AURUSER: 'LunarN0v4'
+                  AURSSHKEY: ${{ secrets.AURSSHKEY }}
+                  AURUSER: 'LunarN0v4'
               run: |
                 mkdir -p ~/.ssh
                 echo "$AURSSHKEY" > ~/.ssh/aur_key
@@ -93,10 +101,25 @@ jobs:
                 EOF
                 ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
                 git clone ssh://aur@aur.archlinux.org/ferronweb.git aur-repo
-                cp PKGBUILD ferron.install aur-repo/
                 cd aur-repo
+                cp ../PKGBUILD ../ferron.install ./
+                ARCH=$(uname -m)
+                echo "Current build architecture: $ARCH"
+                case "$ARCH" in
+                    x86_64) PKG_ARCH="x86_64" ;;
+                    i?86) PKG_ARCH="i686" ;;
+                    armv7*) PKG_ARCH="armv7" ;;
+                    aarch64) PKG_ARCH="aarch64" ;;
+                    riscv64) PKG_ARCH="riscv64" ;;
+                    *) PKG_ARCH="x86_64" ;;
+                esac
+                if [ -f "../.github/aur-pkgbuilds/PKGBUILD.$PKG_ARCH" ]; then
+                  echo "Using architecture-specific PKGBUILD for $PKG_ARCH"
+                  cp "../.github/aur-pkgbuilds/PKGBUILD.$PKG_ARCH" ./PKGBUILD
+                fi
+                makepkg --printsrcinfo > .SRCINFO
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
-                git add PKGBUILD ferron.install
+                git add PKGBUILD ferron.install .SRCINFO
                 git commit -m "Update to version $LATEST_VERSION_NUM"
                 git push -u origin master
