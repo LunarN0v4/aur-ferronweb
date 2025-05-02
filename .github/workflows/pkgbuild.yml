@@ -46,7 +46,7 @@ jobs:
                 fi
 
             - name: Install makepkg
-              if: env.UPDATENEEDED == 'true'
+              if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
               run: |
                 sudo apt-get -q -y install --no-install-recommends git pkg-config meson gcc libtool libgpgme-dev libarchive-dev ninja-build libcurl4-openssl-dev libssl-dev curl gettext python3 python3-setuptools dash gawk ca-certificates fakeroot fakechroot libarchive-tools
                 sudo mkdir -p /usr/local/meson
