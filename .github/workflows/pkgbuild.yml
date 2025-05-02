@@ -44,20 +44,26 @@ jobs:
               if: env.UPDATENEEDED == 'true'
               run: |
                 echo "Updating PKGBUILD from version $CURRENT_VERSION to $LATEST_VERSION_NUM"
-                ARCHS=("x86_64" "i686" "armv7" "aarch64" "riscv64")
-                CHECKSUMS=()
-                for ARCH in "${ARCHS[@]}"; do
-                    echo "Processing architecture: $ARCH"
-                    FILE_NAME="ferron-$LATEST_VERSION_NUM-$ARCH-unknown-linux-gnu.zip"
-                    URL="https://downloads.ferronweb.org/$LATEST_VERSION/$FILE_NAME"
-                    curl -fsSL "$URL" -o "$FILE_NAME"
-                    CHECKSUM=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
-                    CHECKSUMS+=("'$CHECKSUM'")
-                done
-                CHECKSUMS_JOINED=$(IFS=,; echo "${CHECKSUMS[*]}")
+                declare -A ARCH_MAPPINGS
+                ARCH_MAPPINGS=( ["x86_64"]="x86_64" ["i686"]="i686" ["armv7"]="armv7" ["aarch64"]="aarch64" ["riscv64gc"]="riscv64" )
                 sed -i "s/pkgver=.*$/pkgver=$LATEST_VERSION_NUM/g" PKGBUILD
                 sed -i "s/pkgrel=.*$/pkgrel=1/g" PKGBUILD
-                sed -i "s/sha256sums=.*$/sha256sums=($CHECKSUMS_JOINED)/g" PKGBUILD
+                for SRC_ARCH in "x86_64" "i686" "armv7" "aarch64" "riscv64gc"; do
+                    PKG_ARCH=${ARCH_MAPPINGS[$SRC_ARCH]}
+                    echo "Processing architecture: $SRC_ARCH (package arch: $PKG_ARCH)"
+                    if [ "$SRC_ARCH" == "armv7" ]; then
+                        ABI="eabihf"
+                    else
+                        ABI=""
+                    fi
+                    FILE_NAME="ferron-$LATEST_VERSION_NUM-$SRC_ARCH-unknown-linux-gnu${ABI}.zip"
+                    URL="https://downloads.ferronweb.org/$LATEST_VERSION/$FILE_NAME"
+                    echo "Downloading: $URL"
+                    curl -fsSL "$URL" -o "$FILE_NAME"
+                    CHECKSUM=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
+                    echo "Checksum for $PKG_ARCH: $CHECKSUM"
+                    sed -i "s/sha256sums_$PKG_ARCH=.*$/sha256sums_$PKG_ARCH=('$CHECKSUM')/g" PKGBUILD
+                done
                 cat PKGBUILD
 
             - name: Commit and push changes
