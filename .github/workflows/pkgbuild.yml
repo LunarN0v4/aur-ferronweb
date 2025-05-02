@@ -118,8 +118,8 @@ jobs:
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
                 git add PKGBUILD
-                git commit -m "Update to version $LATEST_VERSION_NUM"
-                git push -u origin master
+                git diff --cached --quiet || git commit -m "Update to version $LATEST_VERSION_NUM"
+                git push -u origin master || echo "Nothing to push"
 
             - name: Publish to AUR
               if: env.UPDATENEEDED == 'true' || env.MANUALTRIG == 'true'
@@ -143,5 +143,5 @@ jobs:
                 git config --local user.email "action@github.com"
                 git config --local user.name "GitHub Action"
                 git add PKGBUILD ferron.install .SRCINFO
-                git commit -m "Update to version $LATEST_VERSION_NUM"
-                git push -u origin master
+                git diff --cached --quiet || git commit -m "Update to version $LATEST_VERSION_NUM"
+                git push -u origin master || echo "Nothing to push"
