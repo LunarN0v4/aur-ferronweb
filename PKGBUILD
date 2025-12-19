@@ -2,12 +2,11 @@ pkgname=ferronweb
 pkgver=1.3.5
 pkgrel=1
 pkgdesc="Ferron web server"
-arch=('x86_64' 'i686' 'armv7' 'aarch64' 'riscv64')
-url="https://www.ferronweb.org"
+arch=('x86_64' 'i686' 'armv7h' 'aarch64' 'riscv64')
+url="https://ferron.sh"
 license=('custom')
-depends=('libcap')
-makedepends=('unzip')
-backup=('etc/ferron.yaml')
+depends=('libcap' 'unzip')
+backup=('etc/ferron.kdl')
 install=ferron.install
 _sha256sums_x86_64='ae7a5504ec6810c25055ca351c49096133493a49e004ecf1b7380c6378297378'
 _sha256sums_i686='3d331b16fadc8d4da03b303542a0fe4bae22dc66341add197d2bd7f8a86f256d'
@@ -33,19 +32,15 @@ case "$CARCH" in
         _checksum="$_sha256sums_aarch64"
         ;;
     riscv64) 
-        _arch="riscv64gc" 
+        _arch="riscv64gc"
         _checksum="$_sha256sums_riscv64"
         ;;
     *) error "Unsupported architecture: $CARCH"; exit 1 ;;
 esac
-if [ "$_arch" = "armv7" ]; then
-    abi="eabihf"
-else
-    abi=""
-fi
-source=("https://downloads.ferronweb.org/${pkgver}/ferron-${pkgver}-${_arch}-unknown-linux-gnu${abi}.zip")
+source=("https://dl.ferron.sh/${pkgver}/ferron-${pkgver}-${_arch}-unknown-linux-gnu${abi}.zip")
 sha256sums=("$_checksum")
 provides=('ferron')
+conflicts=('ferron')
 
 prepare() {
     cd "$srcdir"
@@ -58,7 +53,7 @@ package() {
         i686) _arch="i686" ;;
         armv7h) _arch="armv7" ;;
         aarch64) _arch="aarch64" ;;
-        riscv64) _arch="riscv64" ;;
+        riscv64) _arch="riscv64gc" ;;
         *) error "Unsupported architecture: $CARCH"; exit 1 ;;
     esac
     cd "$srcdir"
@@ -74,11 +69,12 @@ package() {
                 install -Dm755 "$binary" "$pkgdir/usr/bin/$binary"
         fi
     done
-    cat > "$pkgdir/etc/ferron.yaml" << 'EOF'
-global:
-    wwwroot: /var/www/ferron
-    logFilePath: /var/log/ferron/access.log
-    errorLogFilePath: /var/log/ferron/error.log
+    cat > "$pkgdir/etc/ferron.kdl" << 'EOF'
+global {
+    wwwroot "/var/www/ferron"
+    logFilePath "/var/log/ferron/access.log"
+    errorLogFilePath "/var/log/ferron/error.log"
+}
 EOF
     cat > "$pkgdir/usr/lib/systemd/system/ferron.service" << 'EOF'
 [Unit]
@@ -88,7 +84,7 @@ After=network.target
 [Service]
 Type=simple
 User=ferron
-ExecStart=/usr/sbin/ferron -c /etc/ferron.yaml
+ExecStart=/usr/sbin/ferron -c /etc/ferron.kdl
 ExecReload=kill -HUP $MAINPID
 Restart=on-failure
 AmbientCapabilities=CAP_NET_BIND_SERVICE
