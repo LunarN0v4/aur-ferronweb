@@ -70,10 +70,18 @@ package() {
         fi
     done
     cat > "$pkgdir/etc/ferron.kdl" << 'EOF'
-global {
-    wwwroot "/var/www/ferron"
-    logFilePath "/var/log/ferron/access.log"
-    errorLogFilePath "/var/log/ferron/error.log"
+// Global-only configuration
+* {
+    default_http_port 80
+    default_https_port #null
+    auto_tls #false
+    protocols h1 h2
+    log "/var/log/ferron/access.log"
+    error_log "/var/log/ferron/error.log"
+}
+// Global configuration
+* {
+    root "/var/www/ferron"
 }
 EOF
     cat > "$pkgdir/usr/lib/systemd/system/ferron.service" << 'EOF'
